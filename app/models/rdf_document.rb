@@ -17,7 +17,7 @@ class RdfDocument
   def to_param; Base64.encode64(id); end
 
   def _source
-    @_source ||= program.evaluate(id, graph)
+    @_source ||= program.evaluate(RDF::URI.new(id), graph).with_indifferent_access
   end
 
   def program
@@ -27,7 +27,7 @@ class RdfDocument
   def program_string
     <<-EOF
 @prefix frbrer : <http://iflastandards.info/ns/fr/frbr/frbrer> ;
-title = frbrer:P3020 :: xsd:string ;
+title = frbrer:P3008 :: xsd:string ;
     EOF
   end
 

@@ -4,7 +4,7 @@ Rails.application.routes.draw do
 
 
   constraints(id: /[^\/]+/) do
-    resources :sparql_document, controller: 'catalog' do
+    resources :rdf_document, controller: 'catalog' do
       member do
         post 'track'
       end

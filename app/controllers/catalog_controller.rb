@@ -66,10 +66,8 @@ class CatalogController < ApplicationController
     end
 
     def spelling
-      nil
+      OpenStruct.new(words: [])
     end
-    
-
   end
 
   class SparqlRepository < Blacklight::AbstractRepository
@@ -78,12 +76,12 @@ class CatalogController < ApplicationController
     end
 
     def search params = {}
-      scope = client
+      scope = client.select
 
-      scope = scope.query(params[:query])
+      scope = scope.where(params[:where])
       # 
-      # scope = scope.limit(params[:limit]) if params[:limit]
-      # scope = scope.offset(params[:offset]) if params[:offset]
+      scope = scope.limit(params[:limit]) if params[:limit]
+      scope = scope.offset(params[:offset]) if params[:offset]
 
       # Array(params[:scope]).each do |s|
       #   scope = scope.instance_exec &s
@@ -106,12 +104,7 @@ class CatalogController < ApplicationController
 
     def add_query sparql_params
   #    sparql_params[:query] = blacklight_params[:q]
-      sparql_params[:query] = <<-EOF
-      SELECT ?subject 
-         WHERE { 
-           ?subject <http://iflastandards.info/ns/fr/frbr/frbrer/P3056> "DRAM"^^<http://www.w3.org/2001/XMLSchema#string> .
-         }
-EOF
+      sparql_params[:where] = [:subject, RDF::URI.new("http://iflastandards.info/ns/fr/frbr/frbrer/P2013"), RDF::URI.new("http://vfrbr.info/person/3434")]
     end
 
     def add_sort sparql_params
@@ -132,8 +125,11 @@ EOF
     
     config.repository_class = CatalogController::SparqlRepository
     config.search_builder_class = CatalogController::SparqlBuilder
+    config.document_model = RdfDocument
     
     config.index.title_field = :title
+
+    config.add_show_field :title
   end
 
 end 
