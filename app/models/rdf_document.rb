@@ -27,7 +27,10 @@ class RdfDocument
   def program_string
     <<-EOF
 @prefix frbrer : <http://iflastandards.info/ns/fr/frbr/frbrer> ;
-title = frbrer:P3008 :: xsd:string ;
+url = . :: xsd:string ;
+title = (frbrer:P3008 | frbrer:P3020) :: xsd:string ;
+formOfExpression = vfrbr:formOfExpression :: xsd:string ;
+work_title = frbrer:P2002 / frbrer:P3001 :: xsd:string ;
     EOF
   end
 

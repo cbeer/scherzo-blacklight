@@ -128,6 +128,10 @@ class CatalogController < ApplicationController
     config.document_model = RdfDocument
     
     config.index.title_field = :title
+    
+    config.add_show_field :url
+    config.add_show_field :work_title
+    config.add_show_field :formOfExpression
 
     config.add_show_field :title
   end
