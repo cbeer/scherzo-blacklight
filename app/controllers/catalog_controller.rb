@@ -13,15 +13,51 @@ class CatalogController < ApplicationController
     end
   end
 
+  class FacetResponse
+    attr_reader :name
+    def initialize name, counts
+      @name = name
+      @counts = counts
+    end
+
+    def items
+      @counts.each_solution.map do |s|
+        if s[:value]
+          OpenStruct.new(name: name, value: s.value.to_s, hits: s.hits.to_i)
+        end
+      end.compact
+    end
+
+    def sort; end
+    def offset; end
+    def limit; end
+  end
+
+  class Aggregations
+    attr_reader :response
+
+    def initialize response
+      @response = response
+    end
+
+    def [] field
+      predicate = response.blacklight_config.facet_fields[field].field
+
+      v = response.scoped_client(:value, count: {'*' => :hits}).where([:subject, predicate, :value]).group(:value).order("DESC(?hits)")
+
+      FacetResponse.new(field, v)
+    end
+  end
+
   class SearchResponse
-    attr_reader :response, :params
+    attr_reader :client, :params
     attr_accessor :document_model, :blacklight_config
 
     include Kaminari::PageScopeMethods
     include Kaminari::ConfigurationMethods::ClassMethods
 
-    def initialize response, params
-      @response = response
+    def initialize client, params
+      @client = client
       @params = params
       
       self.document_model = params[:document_model] || RdfDocument
@@ -31,11 +67,24 @@ class CatalogController < ApplicationController
     def grouped?; false; end
     
     def documents
-      # return enum_for(:documents) unless block_given?
-      
-      @documents = response.each_solution.map do |solution|
+      @documents = select_response.each_solution.map do |solution|
         document_model.new(solution.to_h[:subject])
       end
+    end
+
+    def select_response
+      scope = scoped_client.limit(params[:limit]) if params[:limit]
+      scope = scope.offset(params[:offset]) if params[:offset]
+
+      scope
+    end
+
+    def scoped_client *args
+      scope = client.select *args
+      Array(params[:where]).each do |w|
+        scope = scope.where(w)
+      end
+      scope
     end
 
     def empty?
@@ -43,12 +92,12 @@ class CatalogController < ApplicationController
     end
 
     def total
-      documents.to_a.length
+      scoped_client(distinct: true, count: {'*' => :count}).solutions.first[:count].to_i
     end
     alias_method :total_count, :total
 
     def aggregations
-      {}
+      @aggregations ||= Aggregations.new(self)
     end
 
     def start
@@ -76,18 +125,11 @@ class CatalogController < ApplicationController
     end
 
     def search params = {}
-      scope = client.select
-
-      scope = scope.where(params[:where])
-      # 
-      scope = scope.limit(params[:limit]) if params[:limit]
-      scope = scope.offset(params[:offset]) if params[:offset]
-
       # Array(params[:scope]).each do |s|
       #   scope = scope.instance_exec &s
       # end
 
-      SearchResponse.new(scope, params)
+      SearchResponse.new(client, params.merge(blacklight_config: blacklight_config))
     end
 
     def client
@@ -100,11 +142,20 @@ class CatalogController < ApplicationController
   end
 
   class SparqlBuilder < Blacklight::SearchBuilder
-    self.default_processor_chain = [:add_query, :add_sort, :add_limit]
+    self.default_processor_chain = [:add_query, :add_facets, :add_sort, :add_limit]
 
     def add_query sparql_params
   #    sparql_params[:query] = blacklight_params[:q]
-      sparql_params[:where] = [:subject, RDF::URI.new("http://iflastandards.info/ns/fr/frbr/frbrer/P2013"), RDF::URI.new("http://vfrbr.info/person/3434")]
+      sparql_params[:where] ||= []
+      sparql_params[:where] << [:subject, RDF::URI.new("http://iflastandards.info/ns/fr/frbr/frbrer/P2013"), RDF::URI.new("http://vfrbr.info/person/3434")]
+    end
+
+    def add_facets sparql_params
+      Array(blacklight_params[:f]).each do |field, values|
+        Array(values).each do |v|
+          sparql_params[:where] << [:subject, blacklight_config.facet_fields[field].field, v]
+        end
+      end
     end
 
     def add_sort sparql_params
@@ -133,7 +184,7 @@ class CatalogController < ApplicationController
     config.add_show_field :work_title
     config.add_show_field :formOfExpression
 
-    config.add_show_field :title
+    config.add_facet_field :instrument, field: RDF::URI.new("http://iflastandards.info/ns/fr/frbr/frbrer/P3068")
   end
 
 end 
